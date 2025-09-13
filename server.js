@@ -8,10 +8,8 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-
 // Models
 import User from "./models/User.js";
-
 // Core Routes
 import authRoutes from "./routes/authRoutes.js";
 import employeeRoutes from "./routes/employees.js";
@@ -23,7 +21,6 @@ import savedLoanDetailRoutes from "./routes/savedloandetailRoutes.js";
 import collectionRoutes from "./routes/collectionRoutes.js";
 import overviewRoutes from "./routes/overviewRoutes.js";
 import backupRoutes from "./routes/backupRoutes.js";
-
 // Alternative auth route (if different from authRoutes)
 let authRoutesAlt = null;
 try {
@@ -32,7 +29,6 @@ try {
 } catch (err) {
   console.log("Alternative auth routes not found, using main auth routes");
 }
-
 // Alternative employee routes
 let employeeRoutesAlt = null;
 try {
@@ -41,19 +37,15 @@ try {
 } catch (err) {
   console.log("Alternative employee routes not found, using main employee routes");
 }
-
 // -------- Fix __dirname in ES Modules --------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
 // -------- Load env variables --------
 dotenv.config();
 console.log('Starting server...');
 console.log('MongoDB URI:', process.env.MONGO_URI ? 'Present' : 'Missing');
-
 // -------- Initialize app --------
 const app = express();
-
 // -------- Enhanced CORS configuration --------
 app.use(cors({
   origin: [
@@ -66,11 +58,9 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
   exposedHeaders: ['Content-Disposition', 'Content-Length', 'Content-Type']
 }));
-
 // -------- Middleware --------
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-
 // -------- Create necessary directories --------
 const createDirectories = () => {
   const dirs = [
@@ -89,13 +79,11 @@ const createDirectories = () => {
   });
 };
 createDirectories();
-
 // -------- Serve static files --------
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use("/uploads", express.static(path.join(__dirname, "Uploads")));
 app.use("/temp", express.static(path.join(__dirname, "temp")));
 app.use(express.static(path.join(__dirname, "public")));
-
 // -------- JWT & Admin Middleware --------
 export const protect = (req, res, next) => {
   const token = req.header("Authorization")?.replace("Bearer ", "");
@@ -108,14 +96,12 @@ export const protect = (req, res, next) => {
     res.status(401).json({ msg: "Token is not valid" });
   }
 };
-
 export const authorize = (req, res, next) => {
   if (!req.user || req.user.role !== "admin") {
     return res.status(403).json({ msg: "Access denied. Admin privileges required." });
   }
   next();
 };
-
 // -------- Create Default Admin --------
 const createDefaultAdmin = async () => {
   try {
@@ -134,18 +120,17 @@ const createDefaultAdmin = async () => {
     console.error("❌ Error creating default admin:", err);
   }
 };
-
 // -------- Database Connection --------
 const connectDB = async () => {
   try {
     mongoose.set("strictQuery", false);
     
-    // Updated connection options without deprecated parameters
+    // Fixed connection options without deprecated parameters
     await mongoose.connect(process.env.MONGO_URI, {
       serverSelectionTimeoutMS: 10000,
       socketTimeoutMS: 45000,
-      bufferMaxEntries: 0,
       connectTimeoutMS: 10000
+      // bufferMaxEntries removed (deprecated option)
     });
     
     console.log("✅ MongoDB Connected");
@@ -171,7 +156,6 @@ const connectDB = async () => {
     throw err;
   }
 };
-
 // -------- Import optional dynamic routes --------
 const importRoute = async (routePath, routeName) => {
   try {
@@ -188,7 +172,6 @@ const importRoute = async (routePath, routeName) => {
     return null;
   }
 };
-
 // -------- Load all optional routes --------
 const loadOptionalRoutes = async () => {
   const routes = {};
@@ -213,7 +196,6 @@ const loadOptionalRoutes = async () => {
   
   return routes;
 };
-
 // -------- Register all routes --------
 const registerRoutes = async (optionalRoutes) => {
   console.log('Registering routes...');
@@ -275,7 +257,6 @@ const registerRoutes = async (optionalRoutes) => {
     }
   });
 };
-
 // -------- Utility Routes --------
 const setupUtilityRoutes = () => {
   // Enhanced main route
@@ -309,7 +290,6 @@ const setupUtilityRoutes = () => {
       status: 'Running'
     });
   });
-
   // Enhanced health check endpoint
   app.get('/health', async (req, res) => {
     try {
@@ -348,7 +328,6 @@ const setupUtilityRoutes = () => {
       });
     }
   });
-
   // Stock summary initialization route
   app.get('/init-stock', async (req, res) => {
     try {
@@ -384,7 +363,6 @@ const setupUtilityRoutes = () => {
       });
     }
   });
-
   // Test route for stock summary API
   app.get('/test-stock', async (req, res) => {
     try {
@@ -416,7 +394,6 @@ const setupUtilityRoutes = () => {
       });
     }
   });
-
   // Database collections info endpoint
   app.get('/db-info', async (req, res) => {
     try {
@@ -461,7 +438,6 @@ const setupUtilityRoutes = () => {
       });
     }
   });
-
   // API status endpoint
   app.get('/api-status', (req, res) => {
     const routes = [
@@ -486,7 +462,6 @@ const setupUtilityRoutes = () => {
     });
   });
 };
-
 // -------- Error handling middleware --------
 const setupErrorHandling = async () => {
   // Try to load error middleware
@@ -526,7 +501,6 @@ const setupErrorHandling = async () => {
     });
   }
 };
-
 // -------- Main startup function --------
 const startServer = async () => {
   try {
@@ -601,8 +575,6 @@ const startServer = async () => {
     process.exit(1);
   }
 };
-
 // -------- Start the application --------
 startServer();
-
 export default app;
