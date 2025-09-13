@@ -125,6 +125,11 @@ const connectDB = async () => {
   try {
     mongoose.set("strictQuery", false);
     
+    // Check if MONGO_URI is present
+    if (!process.env.MONGO_URI) {
+      throw new Error("MONGO_URI environment variable is not set");
+    }
+    
     // Updated connection options for Render deployment
     const options = {
       serverSelectionTimeoutMS: 5000,
@@ -159,6 +164,12 @@ const connectDB = async () => {
       console.error("🔍 This is likely an IP whitelisting issue. Please add Render's IP addresses to your MongoDB Atlas whitelist.");
       console.error("🔗 For more information: https://render.com/docs/faq#how-do-i-connect-to-databases-from-render");
       console.error("📋 Render's IP ranges: https://render.com/docs/private-network#egress-ips");
+      console.error("📝 Add these IP ranges to MongoDB Atlas:");
+      console.error("   - 18.224.0.0/13");
+      console.error("   - 44.192.0.0/11");
+      console.error("   - 52.0.0.0/11");
+      console.error("   - 3.224.0.0/12");
+      console.error("   - 3.240.0.0/12");
     }
     
     throw err;
@@ -279,6 +290,7 @@ const setupUtilityRoutes = () => {
         dbInfo: '/db-info',
         initStock: '/init-stock',
         testStock: '/test-stock',
+        testDb: '/test-db',
         // Core APIs
         auth: '/api/auth',
         employees: '/api/employees',
@@ -298,6 +310,49 @@ const setupUtilityRoutes = () => {
       status: 'Running'
     });
   });
+  
+  // Database test endpoint
+  app.get('/test-db', async (req, res) => {
+    try {
+      if (mongoose.connection.readyState === 1) {
+        // Test a simple query
+        const collections = await mongoose.connection.db.listCollections().toArray();
+        res.json({
+          success: true,
+          message: 'MongoDB connection is working',
+          collections: collections.map(c => c.name),
+          count: collections.length,
+          readyState: mongoose.connection.readyState
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          message: 'MongoDB not connected',
+          state: mongoose.connection.readyState,
+          stateDescription: getReadyStateDescription(mongoose.connection.readyState)
+        });
+      }
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'MongoDB connection test failed',
+        error: error.message,
+        readyState: mongoose.connection.readyState
+      });
+    }
+  });
+  
+  // Helper function to describe readyState
+  function getReadyStateDescription(state) {
+    const states = {
+      0: 'disconnected',
+      1: 'connected',
+      2: 'connecting',
+      3: 'disconnecting'
+    };
+    return states[state] || 'unknown';
+  }
+  
   // Enhanced health check endpoint
   app.get('/health', async (req, res) => {
     try {
@@ -336,6 +391,7 @@ const setupUtilityRoutes = () => {
       });
     }
   });
+  
   // Stock summary initialization route
   app.get('/init-stock', async (req, res) => {
     try {
@@ -371,6 +427,7 @@ const setupUtilityRoutes = () => {
       });
     }
   });
+  
   // Test route for stock summary API
   app.get('/test-stock', async (req, res) => {
     try {
@@ -402,6 +459,7 @@ const setupUtilityRoutes = () => {
       });
     }
   });
+  
   // Database collections info endpoint
   app.get('/db-info', async (req, res) => {
     try {
@@ -446,6 +504,7 @@ const setupUtilityRoutes = () => {
       });
     }
   });
+  
   // API status endpoint
   app.get('/api-status', (req, res) => {
     const routes = [
@@ -458,7 +517,6 @@ const setupUtilityRoutes = () => {
       { name: 'Stock Summary', path: '/api/stock-summary', status: 'active' },
       { name: 'Collections', path: '/api/collections', status: 'active' },
       { name: 'Overview', path: '/api/overview', status: 'active' }
-      
     ];
     
     res.json({
@@ -558,6 +616,7 @@ const startServer = async () => {
       console.log(`🔗 Server URL: http://localhost:${PORT}`);
       console.log(`💚 Health Check: http://localhost:${PORT}/health`);
       console.log(`📋 API Status: http://localhost:${PORT}/api-status`);
+      console.log(`🔗 Test DB: http://localhost:${PORT}/test-db`);
       console.log('✅ All systems operational!');
     });
     
