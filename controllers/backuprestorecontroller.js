@@ -233,7 +233,7 @@ export const exportToExcel = async (req, res) => {
       console.error(`❌ Invalid data type: ${dataType}`);
       return res.status(400).json({ error: `Invalid data type: ${dataType}` });
     }
-
+    
     // FIXED: Create backup log entry with better error handling
     try {
       console.log('📝 Creating backup log entry...');
@@ -253,7 +253,7 @@ export const exportToExcel = async (req, res) => {
       console.error('❌ Error creating backup log:', logError);
       console.warn('⚠️ Continuing export without logging');
     }
-
+    
     let data = [];
     
     try {
@@ -289,9 +289,9 @@ export const exportToExcel = async (req, res) => {
       }
       return res.status(404).json({ error: 'No data found to export' });
     }
-
+    
     console.log('🔄 Processing data for Excel export...');
-
+    
     // Clean data for Excel export
     const cleanData = data.map(item => {
       const { _id, __v, ...cleanItem } = item;
@@ -315,9 +315,8 @@ export const exportToExcel = async (req, res) => {
       
       return cleanItem;
     });
-
+    
     console.log('📊 Creating Excel workbook...');
-
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(cleanData);
     
@@ -335,7 +334,7 @@ export const exportToExcel = async (req, res) => {
     }
     
     XLSX.utils.book_append_sheet(wb, ws, dataType);
-
+    
     // Generate filename with timestamp
     const timestamp = new Date().toISOString().slice(0, 10) + '_' + 
       new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }).replace(':', '');
@@ -385,7 +384,7 @@ export const exportToExcel = async (req, res) => {
         console.error('❌ Error updating backup log:', updateError);
       }
     }
-
+    
     // Set headers for Excel download
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -393,9 +392,9 @@ export const exportToExcel = async (req, res) => {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
-
+    
     console.log('📤 Sending file to client...');
-
+    
     // Send file and clean up
     res.sendFile(filepath, (err) => {
       if (err) {
@@ -419,9 +418,8 @@ export const exportToExcel = async (req, res) => {
         }
       }, 30000);
     });
-
+    
     console.log(`=== EXPORT COMPLETED ===\n`);
-
   } catch (error) {
     console.error('\n=== EXPORT ERROR ===');
     console.error('❌ Export error:', error.message);
@@ -467,7 +465,7 @@ export const restoreFromExcel = async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
-
+    
     // FIXED: Create backup log entry for import
     try {
       backupLog = await createBackupLog({
@@ -488,16 +486,14 @@ export const restoreFromExcel = async (req, res) => {
     } catch (logError) {
       console.error('❌ Error creating backup log:', logError);
     }
-
+    
     console.log('📖 Reading Excel file:', req.file.path);
-
     const workbook = XLSX.readFile(req.file.path);
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
     const jsonData = XLSX.utils.sheet_to_json(worksheet);
-
     console.log(`📊 Found ${jsonData.length} records in Excel file`);
-
+    
     if (jsonData.length === 0) {
       if (backupLog) {
         await updateBackupLog(backupLog, {
@@ -507,13 +503,12 @@ export const restoreFromExcel = async (req, res) => {
       }
       return res.status(400).json({ error: 'No data found in Excel file' });
     }
-
+    
     let imported = 0;
     let updated = 0;
     const errors = [];
-
+    
     console.log('🔄 Processing records...');
-
     for (let i = 0; i < jsonData.length; i++) {
       try {
         const record = jsonData[i];
@@ -532,7 +527,7 @@ export const restoreFromExcel = async (req, res) => {
             }
           }
         });
-
+        
         let existingRecord = null;
         if (dataType === 'customers' && Customer) {
           if (cleanRecord.customerId) {
@@ -553,7 +548,7 @@ export const restoreFromExcel = async (req, res) => {
             existingRecord = await model.findOne({ employeeId: cleanRecord.employeeId });
           }
         }
-
+        
         if (existingRecord) {
           await model.findByIdAndUpdate(existingRecord._id, cleanRecord);
           updated++;
@@ -575,9 +570,9 @@ export const restoreFromExcel = async (req, res) => {
         });
       }
     }
-
+    
     console.log(`📊 Import complete: ${imported} imported, ${updated} updated, ${errors.length} errors`);
-
+    
     // FIXED: Update backup log with results
     if (backupLog) {
       try {
@@ -599,7 +594,7 @@ export const restoreFromExcel = async (req, res) => {
         console.error('❌ Error updating restore backup log:', updateError);
       }
     }
-
+    
     // Clean up uploaded file
     try {
       if (fs.existsSync(req.file.path)) {
@@ -609,9 +604,8 @@ export const restoreFromExcel = async (req, res) => {
     } catch (cleanupError) {
       console.error('❌ Error cleaning up uploaded file:', cleanupError);
     }
-
+    
     console.log(`=== RESTORE COMPLETED ===\n`);
-
     res.json({
       success: true,
       result: {
@@ -621,7 +615,6 @@ export const restoreFromExcel = async (req, res) => {
         errors
       }
     });
-
   } catch (error) {
     console.error('\n=== RESTORE ERROR ===');
     console.error('❌ Restore error:', error);
@@ -668,22 +661,22 @@ export const getBackupHistory = async (req, res) => {
         message: 'BackupLog model not available'
       });
     }
-
+    
     const { dataType, type } = req.query;
     const limit = parseInt(req.query.limit) || 20;
     const page = parseInt(req.query.page) || 1;
     const skip = (page - 1) * limit;
-
     const filter = {};
+    
     if (dataType && Object.keys(modelMapping).includes(dataType)) {
       filter.dataType = dataType;
     }
     if (type && ['export', 'import'].includes(type)) {
       filter.type = type;
     }
-
+    
     console.log('🔍 Backup history filter:', filter);
-
+    
     try {
       const history = await BackupLog.find(filter)
         .sort({ createdAt: -1 })
@@ -691,11 +684,9 @@ export const getBackupHistory = async (req, res) => {
         .skip(skip)
         .populate('userId', 'name email')
         .lean();
-
       const total = await BackupLog.countDocuments(filter);
-
       console.log(`✅ Found ${history.length} backup logs out of ${total} total`);
-
+      
       res.json({
         history,
         pagination: {
@@ -732,7 +723,7 @@ export const deleteBackupLog = async (req, res) => {
     if (!backupLog) {
       return res.status(404).json({ error: 'Backup log not found' });
     }
-
+    
     // Delete associated file if it exists
     if (backupLog.filename) {
       const filepath = path.join(__dirname, '..', 'temp', backupLog.filename);
@@ -741,7 +732,7 @@ export const deleteBackupLog = async (req, res) => {
         console.log('🧹 Deleted associated file:', backupLog.filename);
       }
     }
-
+    
     await BackupLog.findByIdAndDelete(id);
     console.log('✅ Backup log deleted successfully');
     
