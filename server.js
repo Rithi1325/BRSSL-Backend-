@@ -1,4 +1,4 @@
-// server.js - Fixed Version with Better MongoDB Connection Handling
+// server.js - Fixed Version with Corrected MongoDB Connection Handling
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
@@ -125,13 +125,20 @@ const connectDB = async () => {
   try {
     mongoose.set("strictQuery", false);
     
-    // Fixed connection options without deprecated parameters
-    await mongoose.connect(process.env.MONGO_URI, {
-      serverSelectionTimeoutMS: 10000,
+    // Updated connection options for Render deployment
+    const options = {
+      serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 45000,
-      connectTimeoutMS: 10000
-      // bufferMaxEntries removed (deprecated option)
-    });
+      maxPoolSize: 50,
+      minPoolSize: 5,
+      maxIdleTimeMS: 30000,
+      waitQueueTimeoutMS: 10000,
+      retryWrites: true,
+      w: 'majority'
+    };
+    
+    // Connect to MongoDB
+    await mongoose.connect(process.env.MONGO_URI, options);
     
     console.log("✅ MongoDB Connected");
     
@@ -151,6 +158,7 @@ const connectDB = async () => {
     if (err.message.includes("Could not connect to any servers in your MongoDB Atlas cluster")) {
       console.error("🔍 This is likely an IP whitelisting issue. Please add Render's IP addresses to your MongoDB Atlas whitelist.");
       console.error("🔗 For more information: https://render.com/docs/faq#how-do-i-connect-to-databases-from-render");
+      console.error("📋 Render's IP ranges: https://render.com/docs/private-network#egress-ips");
     }
     
     throw err;
@@ -504,8 +512,29 @@ const setupErrorHandling = async () => {
 // -------- Main startup function --------
 const startServer = async () => {
   try {
-    // Connect to MongoDB
-    await connectDB();
+    // Connect to MongoDB with retry logic
+    let connected = false;
+    let retries = 5;
+    
+    while (!connected && retries > 0) {
+      try {
+        await connectDB();
+        connected = true;
+      } catch (err) {
+        retries--;
+        console.log(`❌ Connection failed. Retries left: ${retries}`);
+        if (retries > 0) {
+          // Wait before retrying
+          await new Promise(resolve => setTimeout(resolve, 5000));
+        } else {
+          throw err;
+        }
+      }
+    }
+    
+    if (!connected) {
+      throw new Error("Failed to connect to MongoDB after multiple attempts");
+    }
     
     // Create default admin
     await createDefaultAdmin();
