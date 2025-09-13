@@ -43,7 +43,7 @@ const backupLogSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Index for better performance
+// FIXED: Only define indexes once using schema.index()
 backupLogSchema.index({ dataType: 1, type: 1, createdAt: -1 });
 backupLogSchema.index({ userId: 1, createdAt: -1 });
 
