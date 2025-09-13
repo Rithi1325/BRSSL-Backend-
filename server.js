@@ -1,4 +1,4 @@
-// server.js - Merged and Complete Version
+// server.js - Fixed Version with Better MongoDB Connection Handling
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
@@ -48,7 +48,6 @@ const __dirname = path.dirname(__filename);
 
 // -------- Load env variables --------
 dotenv.config();
-
 console.log('Starting server...');
 console.log('MongoDB URI:', process.env.MONGO_URI ? 'Present' : 'Missing');
 
@@ -101,7 +100,6 @@ app.use(express.static(path.join(__dirname, "public")));
 export const protect = (req, res, next) => {
   const token = req.header("Authorization")?.replace("Bearer ", "");
   if (!token) return res.status(401).json({ msg: "No token, authorization denied" });
-
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = decoded.user;
@@ -142,10 +140,12 @@ const connectDB = async () => {
   try {
     mongoose.set("strictQuery", false);
     
+    // Updated connection options without deprecated parameters
     await mongoose.connect(process.env.MONGO_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
       serverSelectionTimeoutMS: 10000,
+      socketTimeoutMS: 45000,
+      bufferMaxEntries: 0,
+      connectTimeoutMS: 10000
     });
     
     console.log("✅ MongoDB Connected");
@@ -161,6 +161,13 @@ const connectDB = async () => {
       stack: err.stack,
       timestamp: new Date().toISOString()
     });
+    
+    // Provide more helpful error message for IP whitelisting issue
+    if (err.message.includes("Could not connect to any servers in your MongoDB Atlas cluster")) {
+      console.error("🔍 This is likely an IP whitelisting issue. Please add Render's IP addresses to your MongoDB Atlas whitelist.");
+      console.error("🔗 For more information: https://render.com/docs/faq#how-do-i-connect-to-databases-from-render");
+    }
+    
     throw err;
   }
 };
@@ -199,7 +206,7 @@ const loadOptionalRoutes = async () => {
     { path: "./routes/ledgerRoutes.js", name: "ledgerRoutes" },
     { path: "./routes/backupRoutes.js", name: "backupRoutes" }
   ];
-
+  
   for (const route of optionalRoutes) {
     routes[route.name] = await importRoute(route.path, route.name);
   }
@@ -245,7 +252,7 @@ const registerRoutes = async (optionalRoutes) => {
     });
     next();
   }, overviewRoutes);
-
+  
   // Optional routes registration
   const routeMapping = [
     { route: optionalRoutes.customerRoutes, endpoint: "/api/customers" },
@@ -260,7 +267,7 @@ const registerRoutes = async (optionalRoutes) => {
     { route: optionalRoutes.ledgerRoutes, endpoint: "/api/ledger" },
     { route: optionalRoutes.backupRoutes, endpoint: "/api/backup" }
   ];
-
+  
   routeMapping.forEach(({ route, endpoint }) => {
     if (route) {
       app.use(endpoint, route);
@@ -313,7 +320,7 @@ const setupUtilityRoutes = () => {
       const modelsToTest = [
         'StockSummary', 'SavedLoanDetail', 'Voucher', 'Customer', 'Collection', 'User'
       ];
-
+      
       for (const modelName of modelsToTest) {
         try {
           const Model = (await import(`./models/${modelName}.js`)).default;
@@ -323,7 +330,7 @@ const setupUtilityRoutes = () => {
           modelTests[modelName.toLowerCase()] = `Error: ${error.message}`;
         }
       }
-
+      
       res.json({
         status: 'healthy',
         uptime: Math.floor(process.uptime()),
@@ -419,10 +426,10 @@ const setupUtilityRoutes = () => {
           message: 'Database not connected'
         });
       }
-
+      
       const collections = await mongoose.connection.db.listCollections().toArray();
       const collectionInfo = {};
-
+      
       for (const collection of collections) {
         try {
           const count = await mongoose.connection.db.collection(collection.name).countDocuments();
@@ -438,7 +445,7 @@ const setupUtilityRoutes = () => {
           };
         }
       }
-
+      
       res.json({
         success: true,
         database: mongoose.connection.db.databaseName,
@@ -446,7 +453,6 @@ const setupUtilityRoutes = () => {
         totalCollections: collections.length,
         timestamp: new Date().toISOString()
       });
-
     } catch (error) {
       res.status(500).json({
         success: false,
@@ -470,7 +476,7 @@ const setupUtilityRoutes = () => {
       { name: 'Overview', path: '/api/overview', status: 'active' }
       
     ];
-
+    
     res.json({
       success: true,
       apiStatus: 'running',
@@ -509,7 +515,7 @@ const setupErrorHandling = async () => {
         path: req.path
       });
     });
-
+    
     // 404 handler
     app.use((req, res) => {
       res.status(404).json({
@@ -551,7 +557,7 @@ const startServer = async () => {
       console.log(`📋 API Status: http://localhost:${PORT}/api-status`);
       console.log('✅ All systems operational!');
     });
-
+    
     // Server error handling
     server.on('error', (err) => {
       if (err.code === 'EADDRINUSE') {
@@ -562,7 +568,7 @@ const startServer = async () => {
         process.exit(1);
       }
     });
-
+    
     // Graceful shutdown handlers
     const gracefulShutdown = (signal) => {
       console.log(`Received ${signal}. Performing graceful shutdown...`);
@@ -574,7 +580,7 @@ const startServer = async () => {
         });
       });
     };
-
+    
     process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
     process.on('SIGINT', () => gracefulShutdown('SIGINT'));
     
@@ -582,12 +588,12 @@ const startServer = async () => {
       console.error('❌ Uncaught Exception:', err);
       process.exit(1);
     });
-
+    
     process.on('unhandledRejection', (err) => {
       console.error('❌ Unhandled Rejection:', err);
       process.exit(1);
     });
-
+    
     return server;
     
   } catch (error) {
